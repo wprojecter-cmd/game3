@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian2, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, createDefaultImageryProviderViewModels, createDefaultTerrainProviderViewModels, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ConstantPositionProperty, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms, ParticleSystem, ParticleBurst, CircleEmitter } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
+import { spawnExplosionVfx } from "./effects/ExplosionVfx.js";
 
 const API = "";
 const initialSettings = { imagery: "satellite", terrain: "cesium-world-terrain", weather: "none", weatherOpacity: .65, weatherSaturation: 1, borders: true, gameTime: new Date().toISOString() };
@@ -160,41 +161,12 @@ export default function App() {
   setStatus("FPV connected · click the terrain to fly to a waypoint, or use WASD / arrow keys.");
  }
  function createCrashExplosion(viewer,position){
-  if(!viewer||viewer.isDestroyed()||!position)return;
-  const canvas=document.createElement("canvas");canvas.width=128;canvas.height=128;
-  const ctx=canvas.getContext("2d");
-  const gradient=ctx.createRadialGradient(64,64,2,64,64,62);
-  gradient.addColorStop(0,"rgba(255,255,220,1)");
-  gradient.addColorStop(.18,"rgba(255,190,70,.95)");
-  gradient.addColorStop(.42,"rgba(235,70,18,.65)");
-  gradient.addColorStop(1,"rgba(45,45,45,0)");
-  ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
-  const burst=new ParticleSystem({
-   image:canvas,
-   startColor:new Color(1,0.72,0.25,0.95),
-   endColor:new Color(0.16,0.16,0.16,0),
-   startScale:5,endScale:34,
-   minimumParticleLife:1.1,maximumParticleLife:2.6,
-   minimumSpeed:12,maximumSpeed:48,
-   imageSize:new Cartesian2(34,34),
-   emissionRate:0,
-   bursts:[new ParticleBurst({time:0,minimum:55,maximum:80}),new ParticleBurst({time:.18,minimum:25,maximum:40})],
-   lifetime:2.8,
-   emitter:new CircleEmitter(2),
-   modelMatrix:Transforms.eastNorthUpToFixedFrame(position),
-   updateCallback:(particle,dt)=>{particle.velocity=Cartesian3.multiplyByScalar(particle.velocity,Math.max(.1,1-dt*.28),particle.velocity);}
-  });
-  viewer.scene.primitives.add(burst);
-  try{
-   const AudioCtx=window.AudioContext||window.webkitAudioContext;
-   if(AudioCtx){
-    const audio=new AudioCtx(),osc=audio.createOscillator(),gain=audio.createGain();
-    osc.type="sawtooth";osc.frequency.setValueAtTime(95,audio.currentTime);osc.frequency.exponentialRampToValueAtTime(28,audio.currentTime+.65);
-    gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.34,audio.currentTime+.025);gain.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+1.15);
-    osc.connect(gain);gain.connect(audio.destination);osc.start();osc.stop(audio.currentTime+1.2);osc.onended=()=>audio.close();
-   }
-  }catch(error){console.warn("Crash audio unavailable:",error);}
-  window.setTimeout(()=>{if(!viewer.isDestroyed())viewer.scene.primitives.remove(burst);},3800);
+  try {
+   spawnExplosionVfx(viewer,position);
+  } catch(error) {
+   console.error("Cinematic explosion failed:",error);
+   setStatus("Explosion effect failed: "+error.message);
+  }
  }
  function disconnectDrone(){
   const v=viewerRef.current;
