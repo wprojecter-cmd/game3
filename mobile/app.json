@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "GAME3",
+    "slug": "game3",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "userInterfaceStyle": "dark",
+    "android": { "package": "com.game3.earth", "usesCleartextTraffic": false },
+    "ios": { "bundleIdentifier": "com.game3.earth" },
+    "plugins": ["react-native-webview"]
+  }
+}
