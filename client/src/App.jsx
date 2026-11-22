@@ -78,7 +78,7 @@ export default function App() {
    maximumLevel:19,
    credit:"Weather tiles © OpenWeather"
   });
-  provider.errorEvent.addEventListener((error)=>{console.warn("OpenWeather tile error:",error);setStatus("OpenWeather tiles unavailable. Check API key and Maps 1.0 subscription.");});
+  provider.errorEvent.addEventListener((error)=>{console.warn("OpenWeather tile error:",error);setStatus("OpenWeather tiles unavailable. Check that the API key is active and Weather Maps 1.0 is enabled.");});
   const layer=viewer.imageryLayers.addImageryProvider(provider);
   layer.alpha=Number(opacity);
   layer.saturation=Number(saturation);
