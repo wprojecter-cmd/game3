@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, IonImageryProvider, OpenStreetMapImageryProvider, ProviderViewModel, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ConstantPositionProperty, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms } from "cesium";
+import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian2, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, createDefaultImageryProviderViewModels, createDefaultTerrainProviderViewModels, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ConstantPositionProperty, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms, ParticleSystem, CircleEmitter } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 const API = "";
@@ -11,9 +11,10 @@ const PLAYER_MODEL = "https://raw.githubusercontent.com/CesiumGS/cesium/main/App
 const DRONE_MODEL = "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumDrone/CesiumDrone.glb";
 
 export default function App() {
- const mapRef=useRef(null), viewerRef=useRef(null), searchMarker=useRef(null), playerEntity=useRef(null), droneEntity=useRef(null), droneFlightRef=useRef({target:null,lastTime:0}), droneInputRef=useRef({forward:0,back:0,left:0,right:0,up:0,down:0}), weatherLayerRef=useRef(null), clickHandlerRef=useRef(null), [token,setToken]=useState(localStorage.getItem("game3_token")||"");
+ const mapRef=useRef(null), viewerRef=useRef(null), searchMarker=useRef(null), playerEntity=useRef(null), droneEntity=useRef(null), droneFlightRef=useRef({target:null,lastTime:0}), droneInputRef=useRef({forward:0,back:0,left:0,right:0,up:0,down:0}), weatherLayerRef=useRef(null), clickHandlerRef=useRef(null), coordinatesRef=useRef(null), droneRef=useRef(false), gameModeRef=useRef(false), [token,setToken]=useState(localStorage.getItem("game3_token")||"");
  const [user,setUser]=useState(null), [authMode,setAuthMode]=useState("login"), [nickname,setNickname]=useState(""), [password,setPassword]=useState(""), [authError,setAuthError]=useState("");
  const [settings,setSettings]=useState(initialSettings), [status,setStatus]=useState("Loading Earth engine…"), [query,setQuery]=useState(""), [coordinates,setCoordinates]=useState(null), [gameMode,setGameMode]=useState(false), [drone,setDrone]=useState(false), [weatherInfo,setWeatherInfo]=useState(null), [busy,setBusy]=useState(false), [gameTime,setGameTime]=useState(12);
+ coordinatesRef.current=coordinates;droneRef.current=drone;gameModeRef.current=gameMode;
  const [ionToken,setIonToken]=useState(import.meta.env.VITE_CESIUM_ION_TOKEN||"");
  const [panel,setPanel]=useState("earth");
 
@@ -28,15 +29,29 @@ export default function App() {
     Ion.defaultAccessToken=ionToken;
     const terrain=await createWorldTerrainAsync({requestVertexNormals:true,requestWaterMask:true});
     if(disposed)return;
-    const imageryProviderViewModels = [
-      new ProviderViewModel({name:"Bing Aerial",tooltip:"Satellite imagery",iconUrl:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%231b536b'/%3E%3Cpath d='M0 42L22 12l16 20 10-12 16 20v24H0' fill='%234a8b61'/%3E%3C/svg%3E",creationFunction:()=>IonImageryProvider.fromAssetId(2)}),
-      new ProviderViewModel({name:"Aerial + Labels",tooltip:"Satellite imagery with labels",iconUrl:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%232b6575'/%3E%3Cpath d='M0 42L22 12l16 20 10-12 16 20v24H0' fill='%23548b62'/%3E%3C/svg%3E",creationFunction:()=>IonImageryProvider.fromAssetId(3)}),
-      new ProviderViewModel({name:"Bing Roads",tooltip:"Road map",iconUrl:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23d4dfd7'/%3E%3Cpath d='M-4 48L70 12M8-4l48 72M-4 22h72' stroke='%23fff' stroke-width='7'/%3E%3C/svg%3E",creationFunction:()=>IonImageryProvider.fromAssetId(4)}),
-      new ProviderViewModel({name:"OpenStreetMap",tooltip:"Open street map",iconUrl:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23dbe6d6'/%3E%3Cpath d='M0 18h64M0 43h64M18 0v64M44 0v64' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E",creationFunction:()=>new OpenStreetMapImageryProvider({url:"https://tile.openstreetmap.org/"})}),
-      new ProviderViewModel({name:"Sentinel-2",tooltip:"Sentinel-2 satellite imagery (Cesium ion)",iconUrl:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%231c5845'/%3E%3Cpath d='M0 0l64 64M64 0L0 64' stroke='%2366a477' stroke-width='15'/%3E%3C/svg%3E",creationFunction:()=>IonImageryProvider.fromAssetId(3954)})
-    ];
-    const viewer=new Viewer(mapRef.current,{terrainProvider:terrain,animation:false,timeline:false,baseLayerPicker:true,imageryProviderViewModels,selectedImageryProviderViewModel:imageryProviderViewModels[0],geocoder:false,homeButton:false,sceneModePicker:true,navigationHelpButton:false,infoBox:false,selectionIndicator:false,fullscreenButton:false,shouldAnimate:true});
+    const imageryProviderViewModels=createDefaultImageryProviderViewModels();
+    const terrainProviderViewModels=createDefaultTerrainProviderViewModels();
+    const viewer=new Viewer(mapRef.current,{terrainProvider:terrain,animation:false,timeline:false,baseLayerPicker:true,imageryProviderViewModels,terrainProviderViewModels,selectedImageryProviderViewModel:imageryProviderViewModels[0],geocoder:false,homeButton:false,sceneModePicker:true,navigationHelpButton:false,infoBox:false,selectionIndicator:false,fullscreenButton:false,shouldAnimate:true});
     viewerRef.current=viewer;
+    const globeClickHandler=new ScreenSpaceEventHandler(viewer.scene.canvas);
+    clickHandlerRef.current=globeClickHandler;
+    globeClickHandler.setInputAction((click)=>{
+      const ray=viewer.camera.getPickRay(click.position);
+      const hit=ray&&viewer.scene.globe.pick(ray,viewer.scene);
+      if(!hit)return;
+      const cart=Cartographic.fromCartesian(hit);
+      if(droneRef.current&&droneEntity.current){
+        droneFlightRef.current.target={longitude:cart.longitude,latitude:cart.latitude,height:Math.max(12,cart.height+12)};
+        setStatus("Drone waypoint selected · flying to clicked location.");
+        return;
+      }
+      if(gameModeRef.current)return;
+      const lat=CesiumMath.toDegrees(cart.latitude),lon=CesiumMath.toDegrees(cart.longitude);
+      setCoordinates({lat,lon});
+      if(searchMarker.current)viewer.entities.remove(searchMarker.current);
+      searchMarker.current=viewer.entities.add({position:hit,point:{pixelSize:13,color:Color.CYAN,outlineColor:Color.WHITE,outlineWidth:2},label:{text:lat.toFixed(4)+", "+lon.toFixed(4),font:"13px sans-serif",fillColor:Color.WHITE,showBackground:true,backgroundColor:Color.BLACK.withAlpha(.75),pixelOffset:new Cartesian2(0,-24)}});
+      setStatus("Destination selected on globe · press START EXPLORING.");
+    },ScreenSpaceEventType.LEFT_CLICK);
     viewer.scene.globe.enableLighting=true;
     viewer.scene.globe.showGroundAtmosphere=true;
     viewer.scene.skyAtmosphere.show=true;
@@ -143,6 +158,43 @@ export default function App() {
   setDrone(true);
   setStatus("FPV connected · click the terrain to fly to a waypoint, or use WASD / arrow keys.");
  }
+ function createCrashExplosion(viewer,position){
+  if(!viewer||viewer.isDestroyed()||!position)return;
+  const canvas=document.createElement("canvas");canvas.width=128;canvas.height=128;
+  const ctx=canvas.getContext("2d");
+  const gradient=ctx.createRadialGradient(64,64,2,64,64,62);
+  gradient.addColorStop(0,"rgba(255,255,220,1)");
+  gradient.addColorStop(.18,"rgba(255,190,70,.95)");
+  gradient.addColorStop(.42,"rgba(235,70,18,.65)");
+  gradient.addColorStop(1,"rgba(45,45,45,0)");
+  ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
+  const burst=new ParticleSystem({
+   image:canvas,
+   startColor:new Color(1,0.72,0.25,0.95),
+   endColor:new Color(0.16,0.16,0.16,0),
+   startScale:5,endScale:34,
+   minimumParticleLife:1.1,maximumParticleLife:2.6,
+   minimumSpeed:12,maximumSpeed:48,
+   imageSize:new Cartesian2(34,34),
+   emissionRate:0,
+   bursts:[{time:0,minimum:55,maximum:80},{time:.18,minimum:25,maximum:40}],
+   lifetime:2.8,
+   emitter:new CircleEmitter(2),
+   modelMatrix:Transforms.eastNorthUpToFixedFrame(position),
+   updateCallback:(particle,dt)=>{particle.velocity=Cartesian3.multiplyByScalar(particle.velocity,Math.max(.1,1-dt*.28),particle.velocity);}
+  });
+  viewer.scene.primitives.add(burst);
+  try{
+   const AudioCtx=window.AudioContext||window.webkitAudioContext;
+   if(AudioCtx){
+    const audio=new AudioCtx(),osc=audio.createOscillator(),gain=audio.createGain();
+    osc.type="sawtooth";osc.frequency.setValueAtTime(95,audio.currentTime);osc.frequency.exponentialRampToValueAtTime(28,audio.currentTime+.65);
+    gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.34,audio.currentTime+.025);gain.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+1.15);
+    osc.connect(gain);gain.connect(audio.destination);osc.start();osc.stop(audio.currentTime+1.2);osc.onended=()=>audio.close();
+   }
+  }catch(error){console.warn("Crash audio unavailable:",error);}
+  window.setTimeout(()=>{if(!viewer.isDestroyed())viewer.scene.primitives.remove(burst);},3800);
+ }
  function disconnectDrone(){
   const v=viewerRef.current;
   if(v){v.trackedEntity=undefined;if(droneEntity.current)v.entities.remove(droneEntity.current);}
@@ -152,19 +204,6 @@ export default function App() {
  }
  async function updateTime(value){setGameTime(Number(value));const v=viewerRef.current;if(v){const d=new Date();d.setHours(Number(value),0,0,0);v.clock.currentTime=JulianDate.fromDate(d);v.scene.light=undefined;v.scene.requestRender();}const next={...settings,gameTime:new Date(new Date().setHours(Number(value),0,0,0)).toISOString()};await saveSettings(next);}
  async function toggleWeather(mode){const next={...settings,weather:mode};await saveSettings(next);setWeatherInfo(null);await applyWeatherLayer(mode,next.weatherOpacity,next.weatherSaturation);if(coordinates&&mode!=="none"){try{const r=await fetch(API+"/api/weather?lat="+coordinates.lat+"&lon="+coordinates.lon+"&mode="+mode);const data=await r.json();setWeatherInfo(data);if(!r.ok)setStatus(data.error||"Weather unavailable");}catch{setStatus("Weather service unavailable");}}}
- useEffect(()=>{
-  const v=viewerRef.current;if(!v||v.isDestroyed())return;
-  const handler=new ScreenSpaceEventHandler(v.scene.canvas);
-  clickHandlerRef.current=handler;
-  handler.setInputAction((click)=>{
-   if(!gameMode||!drone||!droneEntity.current)return;
-   const ray=v.camera.getPickRay(click.position);const hit=ray&&v.scene.globe.pick(ray,v.scene);if(!hit)return;
-   const cart=Cartographic.fromCartesian(hit);
-   droneFlightRef.current.target={longitude:cart.longitude,latitude:cart.latitude,height:Math.max(12,cart.height+12)};
-   setStatus("Waypoint locked · drone flying. Use WASD / arrows or the virtual controls to steer.");
-  },ScreenSpaceEventType.LEFT_CLICK);
-  return()=>{handler.destroy();clickHandlerRef.current=null;};
- },[gameMode,drone,coordinates]);
  useEffect(()=>{
   const v=viewerRef.current;if(!v||!drone||!droneEntity.current)return;
   let previous=Date.now();
@@ -186,8 +225,16 @@ export default function App() {
    const latitude=current.latitude+(north*speed*dt)/6378137;
    const cosine=Math.max(.08,Math.cos(current.latitude));
    const longitude=current.longitude+(east*speed*dt)/(6378137*cosine);
-   const height=Math.max(2,current.height+vertical*speed*dt);
+   const height=Math.max(0,current.height+vertical*speed*dt);
    const next=Cartesian3.fromRadians(longitude,latitude,height);
+   const ground=v.scene.globe.getHeight(new Cartographic(longitude,latitude,0));
+   if(Number.isFinite(ground)&&height<=ground+1.8){
+    entity.position.setValue(Cartesian3.fromRadians(longitude,latitude,ground+0.5));
+    createCrashExplosion(v,entity.position.getValue(v.clock.currentTime));
+    disconnectDrone();
+    setStatus("DRONE CRASH · impact detected · explosion triggered · signal lost.");
+    return;
+   }
    entity.position.setValue(next);
    if(magnitude>.01)entity.orientation=Transforms.headingPitchRollQuaternion(next,new HeadingPitchRoll(Math.atan2(east,north),0,0));
   };
