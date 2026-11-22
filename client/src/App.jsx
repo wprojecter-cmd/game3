@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, UrlTemplateImageryProvider, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, ImageryLayer, IonImageryProvider, OpenStreetMapImageryProvider, ProviderViewModel, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms } from "cesium";
+import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, IonImageryProvider, OpenStreetMapImageryProvider, ProviderViewModel, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 const API = "";
@@ -75,7 +75,6 @@ export default function App() {
   const provider=new UrlTemplateImageryProvider({
    tilingScheme:new WebMercatorTilingScheme(),
    url:`/api/weather/tiles/${tileLayer}/{z}/{x}/{y}.png`,
-   tilingScheme:undefined,
    maximumLevel:19,
    credit:"Weather tiles © OpenWeather"
   });
