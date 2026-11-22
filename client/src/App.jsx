@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, IonImageryProvider, OpenStreetMapImageryProvider, ProviderViewModel, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms } from "cesium";
+import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, IonImageryProvider, OpenStreetMapImageryProvider, ProviderViewModel, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ConstantPositionProperty, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 const API = "";
@@ -11,7 +11,7 @@ const PLAYER_MODEL = "https://tevy.dev/models/casual-walker/v1/lod0.glb";
 const DRONE_MODEL = "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumDrone/CesiumDrone.glb";
 
 export default function App() {
- const mapRef=useRef(null), viewerRef=useRef(null), searchMarker=useRef(null), playerEntity=useRef(null), droneEntity=useRef(null), weatherLayerRef=useRef(null), clickHandlerRef=useRef(null), [token,setToken]=useState(localStorage.getItem("game3_token")||"");
+ const mapRef=useRef(null), viewerRef=useRef(null), searchMarker=useRef(null), playerEntity=useRef(null), droneEntity=useRef(null), droneFlightRef=useRef({target:null,lastTime:0}), droneInputRef=useRef({forward:0,back:0,left:0,right:0,up:0,down:0}), weatherLayerRef=useRef(null), clickHandlerRef=useRef(null), [token,setToken]=useState(localStorage.getItem("game3_token")||"");
  const [user,setUser]=useState(null), [authMode,setAuthMode]=useState("login"), [nickname,setNickname]=useState(""), [password,setPassword]=useState(""), [authError,setAuthError]=useState("");
  const [settings,setSettings]=useState(initialSettings), [status,setStatus]=useState("Loading Earth engine…"), [query,setQuery]=useState(""), [coordinates,setCoordinates]=useState(null), [gameMode,setGameMode]=useState(false), [drone,setDrone]=useState(false), [weatherInfo,setWeatherInfo]=useState(null), [busy,setBusy]=useState(false), [gameTime,setGameTime]=useState(12);
  const [ionToken,setIonToken]=useState(import.meta.env.VITE_CESIUM_ION_TOKEN||"");
@@ -103,10 +103,104 @@ export default function App() {
   }
   setCoordinates({lat,lon});const v=viewerRef.current;if(v){v.camera.flyTo({destination:Cartesian3.fromDegrees(lon,lat,18000),duration:2});if(searchMarker.current)v.entities.remove(searchMarker.current);searchMarker.current=v.entities.add({position:Cartesian3.fromDegrees(lon,lat),point:{pixelSize:13,color:Color.CYAN,outlineColor:Color.WHITE,outlineWidth:2},label:{text:raw,font:"14px sans-serif",fillColor:Color.WHITE,showBackground:true,backgroundColor:Color.BLACK.withAlpha(.7),pixelOffset:new Cartesian3(0,-24,0)}});}
  }
- function startGame(){if(!coordinates){setStatus("Choose a location on Earth or search for one first.");return;}setGameMode(true);setDrone(false);const v=viewerRef.current;if(v){const position=Cartesian3.fromDegrees(coordinates.lon,coordinates.lat,2);if(playerEntity.current)v.entities.remove(playerEntity.current);playerEntity.current=v.entities.add({name:"GAME3 Player",position,model:{uri:PLAYER_MODEL,scale:1,minimumPixelSize:72,maximumScale:120,runAnimations:true},orientation:Transforms.headingPitchRollQuaternion(position,new HeadingPitchRoll(0,0,0))});v.camera.flyTo({destination:Cartesian3.fromDegrees(coordinates.lon,coordinates.lat,22),orientation:{heading:0,pitch:CesiumMath.toRadians(-35),roll:0},duration:2});setStatus("Player loaded · select DRONE in inventory to deploy.");}}
+ async function startGame(){
+  if(!coordinates){setStatus("Choose a location on Earth or search for one first.");return;}
+  const v=viewerRef.current;if(!v)return;
+  setGameMode(true);setDrone(false);
+  try{
+   const point=Cartographic.fromDegrees(coordinates.lon,coordinates.lat);
+   const sampled=await sampleTerrainMostDetailed(v.terrainProvider,[point]);
+   const groundHeight=Number.isFinite(sampled[0]?.height)?sampled[0].height:0;
+   const position=Cartesian3.fromRadians(point.longitude,point.latitude,groundHeight+0.08);
+   if(playerEntity.current)v.entities.remove(playerEntity.current);
+   playerEntity.current=v.entities.add({
+    name:"GAME3 Player",
+    position,
+    model:{uri:PLAYER_MODEL,scale:1,minimumPixelSize:72,maximumScale:160,runAnimations:true},
+    orientation:Transforms.headingPitchRollQuaternion(position,new HeadingPitchRoll(0,0,0))
+   });
+   v.camera.flyTo({destination:Cartesian3.fromRadians(point.longitude,point.latitude,groundHeight+7),orientation:{heading:0,pitch:CesiumMath.toRadians(-18),roll:0},duration:2});
+   setStatus("Player model placed on sampled terrain · select DRONE to deploy.");
+  }catch(error){console.error("Player terrain/model setup:",error);setStatus("Could not place player on terrain: "+error.message);}
+ }
+ function deployDrone(){
+  const v=viewerRef.current;if(!v||!coordinates)return;
+  const playerPosition=playerEntity.current?.position?.getValue(v.clock.currentTime);
+  const origin=playerPosition||Cartesian3.fromDegrees(coordinates.lon,coordinates.lat,20);
+  const cart=Cartographic.fromCartesian(origin);
+  const dronePosition=Cartesian3.fromRadians(cart.longitude,cart.latitude,cart.height+8);
+  if(droneEntity.current)v.entities.remove(droneEntity.current);
+  droneEntity.current=v.entities.add({
+   name:"GAME3 FPV Drone",
+   position:new ConstantPositionProperty(dronePosition),
+   model:{uri:DRONE_MODEL,scale:1,minimumPixelSize:52,maximumScale:120,runAnimations:true},
+   orientation:Transforms.headingPitchRollQuaternion(dronePosition,new HeadingPitchRoll(0,0,0)),
+   path:{show:true,leadTime:0,trailTime:15,width:2,material:Color.CYAN}
+  });
+  droneFlightRef.current={target:null,lastTime:Date.now()};
+  droneInputRef.current={forward:0,back:0,left:0,right:0,up:0,down:0};
+  v.trackedEntity=droneEntity.current;
+  setDrone(true);
+  setStatus("FPV connected · click the terrain to fly to a waypoint, or use WASD / arrow keys.");
+ }
+ function disconnectDrone(){
+  const v=viewerRef.current;
+  if(v){v.trackedEntity=undefined;if(droneEntity.current)v.entities.remove(droneEntity.current);}
+  droneEntity.current=null;droneFlightRef.current={target:null,lastTime:0};
+  droneInputRef.current={forward:0,back:0,left:0,right:0,up:0,down:0};
+  setDrone(false);setStatus("Drone link disconnected.");
+ }
  async function updateTime(value){setGameTime(Number(value));const v=viewerRef.current;if(v){const d=new Date();d.setHours(Number(value),0,0,0);v.clock.currentTime=JulianDate.fromDate(d);v.scene.light=undefined;v.scene.requestRender();}const next={...settings,gameTime:new Date(new Date().setHours(Number(value),0,0,0)).toISOString()};await saveSettings(next);}
  async function toggleWeather(mode){const next={...settings,weather:mode};await saveSettings(next);setWeatherInfo(null);await applyWeatherLayer(mode,next.weatherOpacity,next.weatherSaturation);if(coordinates&&mode!=="none"){try{const r=await fetch(API+"/api/weather?lat="+coordinates.lat+"&lon="+coordinates.lon+"&mode="+mode);const data=await r.json();setWeatherInfo(data);if(!r.ok)setStatus(data.error||"Weather unavailable");}catch{setStatus("Weather service unavailable");}}}
- useEffect(()=>{const v=viewerRef.current;if(!v||v.isDestroyed())return;const handler=new ScreenSpaceEventHandler(v.scene.canvas);clickHandlerRef.current=handler;handler.setInputAction(async(click)=>{if(!gameMode||!drone||!coordinates)return;const ray=v.camera.getPickRay(click.position);const hit=ray&&v.scene.globe.pick(ray,v.scene);if(!hit)return;const cart=Cartographic.fromCartesian(hit);const pos=Cartesian3.fromRadians(cart.longitude,cart.latitude,cart.height+12);if(droneEntity.current)v.entities.remove(droneEntity.current);droneEntity.current=v.entities.add({name:"GAME3 Drone",position:pos,model:{uri:DRONE_MODEL,scale:1,minimumPixelSize:48,maximumScale:80,runAnimations:true}});v.camera.flyTo({destination:Cartesian3.fromRadians(cart.longitude,cart.latitude,cart.height+28),orientation:{heading:v.camera.heading,pitch:CesiumMath.toRadians(-12),roll:0},duration:1.2});v.trackedEntity=droneEntity.current;setStatus("Drone camera active · click another point to fly there.");},ScreenSpaceEventType.LEFT_CLICK);return()=>{handler.destroy();clickHandlerRef.current=null;};},[gameMode,drone,coordinates]);
+ useEffect(()=>{
+  const v=viewerRef.current;if(!v||v.isDestroyed())return;
+  const handler=new ScreenSpaceEventHandler(v.scene.canvas);
+  clickHandlerRef.current=handler;
+  handler.setInputAction((click)=>{
+   if(!gameMode||!drone||!droneEntity.current)return;
+   const ray=v.camera.getPickRay(click.position);const hit=ray&&v.scene.globe.pick(ray,v.scene);if(!hit)return;
+   const cart=Cartographic.fromCartesian(hit);
+   droneFlightRef.current.target={longitude:cart.longitude,latitude:cart.latitude,height:Math.max(12,cart.height+12)};
+   setStatus("Waypoint locked · drone flying. Use WASD / arrows or the virtual controls to steer.");
+  },ScreenSpaceEventType.LEFT_CLICK);
+  return()=>{handler.destroy();clickHandlerRef.current=null;};
+ },[gameMode,drone,coordinates]);
+ useEffect(()=>{
+  const v=viewerRef.current;if(!v||!drone||!droneEntity.current)return;
+  let previous=Date.now();
+  const tick=()=>{
+   const now=Date.now();const dt=Math.min(.05,Math.max(0,(now-previous)/1000));previous=now;
+   const entity=droneEntity.current;if(!entity)return;
+   const p=entity.position.getValue(v.clock.currentTime);if(!p)return;
+   const current=Cartographic.fromCartesian(p);const input=droneInputRef.current;const target=droneFlightRef.current.target;
+   let north=(input.forward||0)-(input.back||0),east=(input.right||0)-(input.left||0),vertical=(input.up||0)-(input.down||0);
+   if(target){
+    const dLat=target.latitude-current.latitude;
+    const dLon=(target.longitude-current.longitude)*Math.cos(current.latitude);
+    const distance=Math.hypot(dLat,dLon)*6371000;
+    if(distance<2){droneFlightRef.current.target=null;setStatus("Waypoint reached · FPV link stable.");}
+    else {north+=dLat/Math.max(1e-8,Math.hypot(dLat,dLon));east+=dLon/Math.max(1e-8,Math.hypot(dLat,dLon));vertical+=(target.height-current.height)/Math.max(1,distance)*.45;}
+   }
+   const magnitude=Math.hypot(north,east);if(magnitude>1){north/=magnitude;east/=magnitude;}
+   const speed=droneInputRef.current.boost?32:18;
+   const latitude=current.latitude+(north*speed*dt)/6378137;
+   const cosine=Math.max(.08,Math.cos(current.latitude));
+   const longitude=current.longitude+(east*speed*dt)/(6378137*cosine);
+   const height=Math.max(2,current.height+vertical*speed*dt);
+   const next=Cartesian3.fromRadians(longitude,latitude,height);
+   entity.position.setValue(next);
+   if(magnitude>.01)entity.orientation=Transforms.headingPitchRollQuaternion(next,new HeadingPitchRoll(Math.atan2(east,north),0,0));
+  };
+  v.clock.onTick.addEventListener(tick);
+  const onKeyDown=(event)=>{
+   if(["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
+   const key=event.key.toLowerCase();const map={w:"forward",arrowup:"forward",s:"back",arrowdown:"back",a:"left",arrowleft:"left",d:"right",arrowright:"right",q:"down",e:"up",shift:"boost"};
+   const control=map[key];if(control){event.preventDefault();droneInputRef.current[control]=control==="boost"?1:1;}
+  };
+  const onKeyUp=(event)=>{const key=event.key.toLowerCase();const map={w:"forward",arrowup:"forward",s:"back",arrowdown:"back",a:"left",arrowleft:"left",d:"right",arrowright:"right",q:"down",e:"up",shift:"boost"};const control=map[key];if(control)droneInputRef.current[control]=0;};
+  window.addEventListener("keydown",onKeyDown);window.addEventListener("keyup",onKeyUp);
+  return()=>{v.clock.onTick.removeEventListener(tick);window.removeEventListener("keydown",onKeyDown);window.removeEventListener("keyup",onKeyUp);};
+ },[drone]);
  function logout(){localStorage.removeItem("game3_token");setToken("");setUser(null);setGameMode(false);}
  return <div className="app-shell">
   {!user&&<div className="auth-screen"><div className="auth-card"><div className="brand-mark">G3</div><div className="eyebrow">PLANETARY SIMULATION</div><h1>GAME<span>3</span></h1><p className="muted">Explore the real Earth. Take control.</p><form onSubmit={authenticate}><label>Nickname</label><input value={nickname} onChange={e=>setNickname(e.target.value)} minLength="3" maxLength="20" autoComplete="username" placeholder="Your callsign" required/><label>Password</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength="8" autoComplete={authMode==="register"?"new-password":"current-password"} placeholder="At least 8 characters" required/>{authError&&<div className="error">{authError}</div>}<button className="primary full" disabled={busy}>{busy?"Please wait…":authMode==="register"?"Create account":"Sign in"}</button></form><button className="text-button" onClick={()=>setAuthMode(authMode==="register"?"login":"register")}>{authMode==="register"?"Already registered? Sign in":"New here? Create an account"}</button><div className="auth-foot">Your profile and world settings are saved securely.</div></div></div>}
@@ -119,7 +213,7 @@ export default function App() {
   </aside>
   <div className="statusbar"><span className="online-dot"/>{status}<span className="coords">{coordinates?coordinates.lat.toFixed(4)+"°, "+coordinates.lon.toFixed(4)+"°":"Select a destination"}</span></div>
   <div className="map-controls"><button onClick={()=>viewerRef.current?.camera.zoomIn(8000)}>＋</button><button onClick={()=>viewerRef.current?.camera.zoomOut(8000)}>−</button><button onClick={()=>viewerRef.current?.camera.flyHome(1)}>⌂</button></div>
-  {!gameMode?<div className="start-card"><div className="eyebrow">MISSION CONTROL</div><h2>Choose your destination</h2><p>Select a point on the globe or search for a place or coordinates to begin.</p><button className="primary" onClick={startGame} disabled={!coordinates}>START EXPLORING <span>→</span></button></div>:<div className="game-hud"><div className="hud-top"><span className="live-pill">● LIVE WORLD</span><span>{coordinates?.lat.toFixed(3)} / {coordinates?.lon.toFixed(3)}</span><button onClick={()=>{setGameMode(false);setDrone(false);}}>EXIT MODE</button></div><div className="hud-bottom"><div className="time-control"><span>LOCAL SIMULATION TIME</span><b>{String(Math.floor(gameTime)).padStart(2,"0")}:00</b><input type="range" min="0" max="23" value={gameTime} onChange={e=>updateTime(e.target.value)}/><div className="range-label"><span>00:00</span><span>12:00</span><span>23:00</span></div></div><div className="inventory"><span className="eyebrow">INVENTORY</span><button className={drone?"selected":""} onClick={()=>{const next=!drone;setDrone(next);if(!next&&droneEntity.current&&viewerRef.current){viewerRef.current.entities.remove(droneEntity.current);droneEntity.current=null;setStatus("Drone stored.");}else if(next)setStatus("Drone equipped · click the terrain to deploy.");}}><span className="item-icon">◈</span><b>DRONE</b><small>{drone?"EQUIPPED":"SLOT 01"}</small></button></div></div>{drone&&<div className="drone-notice"><b>DRONE LINK READY</b><span>Click/tap the terrain to deploy the 3D drone and move its camera.</span><button onClick={()=>{setDrone(false);if(droneEntity.current&&viewerRef.current)viewerRef.current.entities.remove(droneEntity.current);droneEntity.current=null;setStatus("Drone connection lost.");}}>DISCONNECT</button></div>}</div>}
+  {!gameMode?<div className="start-card"><div className="eyebrow">MISSION CONTROL</div><h2>Choose your destination</h2><p>Select a point on the globe or search for a place or coordinates to begin.</p><button className="primary" onClick={startGame} disabled={!coordinates}>START EXPLORING <span>→</span></button></div>:<div className="game-hud"><div className="hud-top"><span className="live-pill">● LIVE WORLD</span><span>{coordinates?.lat.toFixed(3)} / {coordinates?.lon.toFixed(3)}</span><button onClick={()=>{setGameMode(false);setDrone(false);}}>EXIT MODE</button></div><div className="hud-bottom"><div className="time-control"><span>LOCAL SIMULATION TIME</span><b>{String(Math.floor(gameTime)).padStart(2,"0")}:00</b><input type="range" min="0" max="23" value={gameTime} onChange={e=>updateTime(e.target.value)}/><div className="range-label"><span>00:00</span><span>12:00</span><span>23:00</span></div></div><div className="inventory"><span className="eyebrow">INVENTORY</span><button className={drone?"selected":""} onClick={()=>drone?disconnectDrone():deployDrone()}><span className="item-icon">◈</span><b>DRONE</b><small>{drone?"FPV ACTIVE":"DEPLOY"}</small></button></div></div>{drone&&<div className="drone-notice"><b>FPV DRONE</b><span>WASD / arrows · Q/E altitude · Shift boost · tap map for waypoint</span><div className="drone-pad"><button onPointerDown={()=>droneInputRef.current.forward=1} onPointerUp={()=>droneInputRef.current.forward=0} onPointerLeave={()=>droneInputRef.current.forward=0}>▲</button><div><button onPointerDown={()=>droneInputRef.current.left=1} onPointerUp={()=>droneInputRef.current.left=0} onPointerLeave={()=>droneInputRef.current.left=0}>◀</button><button onPointerDown={()=>droneInputRef.current.back=1} onPointerUp={()=>droneInputRef.current.back=0} onPointerLeave={()=>droneInputRef.current.back=0}>▼</button><button onPointerDown={()=>droneInputRef.current.right=1} onPointerUp={()=>droneInputRef.current.right=0} onPointerLeave={()=>droneInputRef.current.right=0}>▶</button></div></div><button onClick={disconnectDrone}>DISCONNECT</button></div>}</div>}
   </>}
   {!user&&<div className="map-loading">GAME3 · GLOBAL WORLD ENGINE</div>}
  </div>;
