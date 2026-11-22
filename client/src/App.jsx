@@ -7,7 +7,7 @@ const initialSettings = { imagery: "satellite", terrain: "cesium-world-terrain",
 const layers = [{id:"none",label:"Off"},{id:"temperature",label:"Temperature"},{id:"pressure",label:"Pressure"},{id:"precipitation",label:"Precipitation"},{id:"wind",label:"Wind"},{id:"clouds",label:"Clouds"}];
 const imageryOptions = [{id:"satellite",label:"Bing Aerial"},{id:"labels",label:"Aerial with labels"},{id:"street",label:"OpenStreetMap"},{id:"roads",label:"Bing Roads"},{id:"sentinel",label:"Sentinel-2"}];
 const weatherTileLayers = {temperature:"temp_new",pressure:"pressure_new",precipitation:"precipitation_new",wind:"wind_new",clouds:"clouds_new"};
-const PLAYER_MODEL = "https://tevy.dev/models/casual-walker/v1/lod0.glb";
+const PLAYER_MODEL = "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumMan/Cesium_Man.glb";
 const DRONE_MODEL = "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumDrone/CesiumDrone.glb";
 
 export default function App() {
@@ -111,7 +111,7 @@ export default function App() {
    const point=Cartographic.fromDegrees(coordinates.lon,coordinates.lat);
    const sampled=await sampleTerrainMostDetailed(v.terrainProvider,[point]);
    const groundHeight=Number.isFinite(sampled[0]?.height)?sampled[0].height:0;
-   const position=Cartesian3.fromRadians(point.longitude,point.latitude,groundHeight+0.08);
+   const position=Cartesian3.fromRadians(point.longitude,point.latitude,groundHeight+0.5);
    if(playerEntity.current)v.entities.remove(playerEntity.current);
    playerEntity.current=v.entities.add({
     name:"GAME3 Player",
@@ -119,7 +119,7 @@ export default function App() {
     model:{uri:PLAYER_MODEL,scale:1,minimumPixelSize:72,maximumScale:160,runAnimations:true},
     orientation:Transforms.headingPitchRollQuaternion(position,new HeadingPitchRoll(0,0,0))
    });
-   v.camera.flyTo({destination:Cartesian3.fromRadians(point.longitude,point.latitude,groundHeight+7),orientation:{heading:0,pitch:CesiumMath.toRadians(-18),roll:0},duration:2});
+   v.camera.flyTo({destination:Cartesian3.fromRadians(point.longitude,point.latitude,groundHeight+5),orientation:{heading:0,pitch:CesiumMath.toRadians(-18),roll:0},duration:2});
    setStatus("Player model placed on sampled terrain · select DRONE to deploy.");
   }catch(error){console.error("Player terrain/model setup:",error);setStatus("Could not place player on terrain: "+error.message);}
  }
