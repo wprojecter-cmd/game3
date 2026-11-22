@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian2, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, createDefaultImageryProviderViewModels, createDefaultTerrainProviderViewModels, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ConstantPositionProperty, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms, ParticleSystem, CircleEmitter } from "cesium";
+import { Viewer, Ion, Cesium3DTileset, SceneMode, WebMercatorTilingScheme, Cartesian2, Cartesian3, Math as CesiumMath, createWorldTerrainAsync, createDefaultImageryProviderViewModels, createDefaultTerrainProviderViewModels, UrlTemplateImageryProvider, Color, JulianDate, Cartographic, sampleTerrainMostDetailed, ConstantPositionProperty, ScreenSpaceEventHandler, ScreenSpaceEventType, HeadingPitchRoll, Transforms, ParticleSystem, ParticleBurst, CircleEmitter } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 const API = "";
@@ -178,7 +178,7 @@ export default function App() {
    minimumSpeed:12,maximumSpeed:48,
    imageSize:new Cartesian2(34,34),
    emissionRate:0,
-   bursts:[{time:0,minimum:55,maximum:80},{time:.18,minimum:25,maximum:40}],
+   bursts:[new ParticleBurst({time:0,minimum:55,maximum:80}),new ParticleBurst({time:.18,minimum:25,maximum:40})],
    lifetime:2.8,
    emitter:new CircleEmitter(2),
    modelMatrix:Transforms.eastNorthUpToFixedFrame(position),
