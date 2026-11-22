@@ -25,7 +25,7 @@ app.get("/api/weather/tiles/:layer/:z/:x/:y.png", async (req, res) => {
   const { layer, z, x, y } = req.params;
   if (!weatherTileNames.has(layer)) return res.status(400).json({ error: "Unsupported weather layer." });
   const coords = [z, x, y].map(Number);
-  if (!coords.every(Number.isInteger) || coords[0] < 0 || coords[0] > 12 || coords[1] < 0 || coords[2] < 0 || coords[1] >= 2 ** coords[0] || coords[2] >= 2 ** coords[0]) {
+  if (!coords.every(Number.isInteger) || coords[0] < 0 || coords[0] > 19 || coords[1] < 0 || coords[2] < 0 || coords[1] >= 2 ** coords[0] || coords[2] >= 2 ** coords[0]) {
     return res.status(400).json({ error: "Invalid tile coordinates." });
   }
   if (!process.env.OPENWEATHER_API_KEY) return res.status(503).json({ error: "OPENWEATHER_API_KEY is not configured." });
