@@ -31,7 +31,7 @@ export default function App() {
     if(disposed)return;
     const imageryProviderViewModels=createDefaultImageryProviderViewModels();
     const terrainProviderViewModels=createDefaultTerrainProviderViewModels();
-    const viewer=new Viewer(mapRef.current,{terrainProvider:terrain,animation:false,timeline:false,baseLayerPicker:true,imageryProviderViewModels,terrainProviderViewModels,selectedImageryProviderViewModel:imageryProviderViewModels[0],geocoder:false,homeButton:false,sceneModePicker:true,navigationHelpButton:false,infoBox:false,selectionIndicator:false,fullscreenButton:false,shouldAnimate:true});
+    const viewer=new Viewer(mapRef.current,{terrainProvider:terrain,animation:false,timeline:false,baseLayerPicker:true,imageryProviderViewModels,terrainProviderViewModels,selectedImageryProviderViewModel:imageryProviderViewModels[0],selectedTerrainProviderViewModel:terrainProviderViewModels[0],geocoder:false,homeButton:false,sceneModePicker:true,navigationHelpButton:false,infoBox:false,selectionIndicator:false,fullscreenButton:false,shouldAnimate:true});
     viewerRef.current=viewer;
     const globeClickHandler=new ScreenSpaceEventHandler(viewer.scene.canvas);
     clickHandlerRef.current=globeClickHandler;
