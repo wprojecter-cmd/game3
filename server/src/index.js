@@ -20,6 +20,37 @@ app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 }), authRou
 app.use("/api/profile", profileRoutes);
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "game3-api", database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" }));
 
+const weatherTileNames = new Set(["temp_new", "pressure_new", "precipitation_new", "wind_new", "clouds_new"]);
+app.get("/api/weather/tiles/:layer/:z/:x/:y.png", async (req, res) => {
+  const { layer, z, x, y } = req.params;
+  if (!weatherTileNames.has(layer)) return res.status(400).json({ error: "Unsupported weather layer." });
+  const coords = [z, x, y].map(Number);
+  if (!coords.every(Number.isInteger) || coords[0] < 0 || coords[0] > 12 || coords[1] < 0 || coords[2] < 0 || coords[1] >= 2 ** coords[0] || coords[2] >= 2 ** coords[0]) {
+    return res.status(400).json({ error: "Invalid tile coordinates." });
+  }
+  if (!process.env.OPENWEATHER_API_KEY) return res.status(503).json({ error: "OPENWEATHER_API_KEY is not configured." });
+  try {
+    const tileUrl = new URL(`https://tile.openweathermap.org/map/${layer}/${z}/${x}/${y}.png`);
+    tileUrl.searchParams.set("appid", process.env.OPENWEATHER_API_KEY);
+    const upstream = await fetch(tileUrl, { signal: AbortSignal.timeout(12000) });
+    if (!upstream.ok) {
+      const detail = await upstream.text();
+      console.error("OpenWeather tile error:", upstream.status, detail.slice(0, 300));
+      return res.status(upstream.status).json({ error: "OpenWeather tile request failed.", providerStatus: upstream.status });
+    }
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    res.set({
+      "Content-Type": upstream.headers.get("content-type") || "image/png",
+      "Cache-Control": "public, max-age=300",
+      "Access-Control-Allow-Origin": "*"
+    });
+    res.send(bytes);
+  } catch (error) {
+    console.error("OpenWeather tile proxy error:", error.message);
+    res.status(502).json({ error: "Weather tile provider unavailable." });
+  }
+});
+
 app.get("/api/weather", async (req, res) => {
   const { lat, lon, mode } = req.query;
   if (!process.env.OPENWEATHER_API_KEY) return res.status(503).json({ error: "Weather service is not configured." });
