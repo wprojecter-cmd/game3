@@ -15,15 +15,15 @@ app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || true }));
 app.use(express.json({ limit: "32kb" }));
+app.get("/api/config", (_req, res) => res.json({ cesiumIonToken: process.env.CESIUM_ION_TOKEN || "" }));
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 }), authRoutes);
 app.use("/api/profile", profileRoutes);
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "game3-api", database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" }));
 
-// OpenWeather is proxied so the secret API key is never shipped in the client bundle.
 app.get("/api/weather", async (req, res) => {
   const { lat, lon, mode } = req.query;
   if (!process.env.OPENWEATHER_API_KEY) return res.status(503).json({ error: "Weather service is not configured." });
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return res.status(400).json({ error: "Valid lat and lon are required." });
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon)) || Math.abs(Number(lat)) > 90 || Math.abs(Number(lon)) > 180) return res.status(400).json({ error: "Valid lat and lon are required." });
   try {
     const url = new URL("https://api.openweathermap.org/data/2.5/weather");
     url.search = new URLSearchParams({ lat, lon, appid: process.env.OPENWEATHER_API_KEY, units: "metric" });
