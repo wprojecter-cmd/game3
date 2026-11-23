@@ -12,7 +12,7 @@
     "dev:web": "npm run dev -w client",
     "build": "npm run build -w client",
     "start": "npm run start -w server",
-    "postinstall": "cd node_modules/three-realistic-vfx && npm install --ignore-scripts --include=dev && npx tsup src/index.ts src/react.ts --format esm,cjs --dts --splitting --sourcemap --clean --treeshake --external three --external react --external react-dom --external @react-three/fiber"
+    "postinstall": "cd node_modules/three-realistic-vfx && npm install --ignore-scripts --include=dev && npx tsup --config tsup.config.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
