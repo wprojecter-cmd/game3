@@ -11,7 +11,8 @@
     "dev:server": "npm run dev -w server",
     "dev:web": "npm run dev -w client",
     "build": "npm run build -w client",
-    "start": "npm run start -w server"
+    "start": "npm run start -w server",
+    "postinstall": "npm --prefix node_modules/three-realistic-vfx install --ignore-scripts --include=dev && npm --prefix node_modules/three-realistic-vfx run build"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
