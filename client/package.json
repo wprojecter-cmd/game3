@@ -13,8 +13,7 @@
     "cesium": "^1.125.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "three": "^0.172.0",
-    "vite": "^6.0.7",
-    "three-realistic-vfx": "https://codeload.github.com/Glavin001/three-realistic-vfx/tar.gz/refs/heads/main"
+    "three": "^0.186.0",
+    "vite": "^6.0.7"
   }
 }
