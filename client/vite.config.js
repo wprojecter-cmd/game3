@@ -53,6 +53,14 @@ function copyCesiumStaticAssets() {
 export default defineConfig({
   plugins: [react(), copyCesiumStaticAssets()],
   define: { CESIUM_BASE_URL: JSON.stringify("/cesium/") },
-  server: { host: "0.0.0.0" },
+  server: {
+    host: "0.0.0.0",
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:10000",
+        changeOrigin: true
+      }
+    }
+  },
   preview: { host: "0.0.0.0" }
 });
